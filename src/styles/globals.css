@@ -15,3 +15,40 @@
   }
 }
 
+@layer components {
+  /* Custom select styling for better visibility */
+  select {
+    color: white !important;
+  }
+  
+  select option {
+    background-color: #1e293b !important;
+    color: white !important;
+    padding: 8px;
+  }
+  
+  select option:hover,
+  select option:focus,
+  select option:checked {
+    background-color: #7c3aed !important;
+    color: white !important;
+  }
+  
+  /* Ensure select text is visible */
+  select::-ms-expand {
+    display: none;
+  }
+  
+  /* Firefox */
+  select {
+    -moz-appearance: none;
+    text-indent: 0.01px;
+    text-overflow: '';
+  }
+  
+  /* Chrome, Safari, Edge */
+  select {
+    -webkit-appearance: none;
+  }
+}
+
