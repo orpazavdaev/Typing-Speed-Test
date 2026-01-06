@@ -83,6 +83,8 @@ export default function Home() {
   const performanceIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number>(0)
   const lastWpmRef = useRef<number[]>([])
+  const timeElapsedRef = useRef<number>(0)
+  const textRef = useRef<string>('')
 
   // Load personal best and history from localStorage
   useEffect(() => {
@@ -112,8 +114,10 @@ export default function Home() {
   const generateNewText = useCallback(() => {
     const newText = getTextByDifficulty(category, difficulty)
     setText(newText)
+    textRef.current = newText
     setUserInput('')
     setTimeElapsed(0)
+    timeElapsedRef.current = 0
     setIsRunning(false)
     setIsFinished(false)
     setWpm(0)
@@ -138,7 +142,11 @@ export default function Home() {
     if (isRunning && !isFinished) {
       startTimeRef.current = Date.now()
       timerRef.current = setInterval(() => {
-        setTimeElapsed((prev) => prev + 0.1)
+        setTimeElapsed((prev) => {
+          const newTime = prev + 0.1
+          timeElapsedRef.current = newTime
+          return newTime
+        })
       }, 100)
 
       // Track performance every second
@@ -206,27 +214,51 @@ export default function Home() {
     }
   }, [text, timeElapsed])
 
-  const finishTest = useCallback((finalInput: string) => {
+  const finishTest = useCallback((finalInput: string, finalTime?: number) => {
+    // Stop timers first
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+    if (performanceIntervalRef.current) {
+      clearInterval(performanceIntervalRef.current)
+      performanceIntervalRef.current = null
+    }
+    
     setIsFinished(true)
     setIsRunning(false)
     
+    // Use provided time or current timeElapsed from ref
+    const testTime = finalTime !== undefined ? finalTime : timeElapsedRef.current
+    const currentText = textRef.current || text
+    
+    
     // Calculate final stats
-    const words = finalInput.trim().split(/\s+/).filter((word) => word.length > 0)
-    const minutes = timeElapsed / 60
-    const finalRawWpm = minutes > 0 ? Math.round(words.length / minutes) : 0
+    // Count words based on typed characters (5 characters = 1 word)
+    const charactersTyped = finalInput.length
+    const wordsTyped = Math.max(1, Math.round(charactersTyped / 5))
+    const minutes = testTime / 60
+    const finalRawWpm = minutes > 0 ? Math.round(wordsTyped / minutes) : 0
     
     let finalErrorCount = 0
-    for (let i = 0; i < Math.min(finalInput.length, text.length); i++) {
-      if (finalInput[i] !== text[i]) {
+    for (let i = 0; i < Math.min(finalInput.length, currentText.length); i++) {
+      if (finalInput[i] !== currentText[i]) {
         finalErrorCount++
       }
+    }
+    
+    // If input is shorter than text, count remaining characters as errors
+    if (finalInput.length < currentText.length) {
+      finalErrorCount += (currentText.length - finalInput.length)
     }
     
     const finalAccuracy = finalInput.length > 0
       ? Math.max(0, Math.round(((finalInput.length - finalErrorCount) / finalInput.length) * 100))
       : 100
     
-    const finalNetWpm = Math.max(0, finalRawWpm - (finalErrorCount / Math.max(minutes, 0.01)))
+    // Calculate net WPM - apply accuracy as a multiplier
+    // This way, if you have 50% accuracy, you get 50% of your raw WPM
+    const finalNetWpm = Math.round(finalRawWpm * (finalAccuracy / 100))
     
     // Calculate consistency
     let finalConsistency = 100
@@ -237,7 +269,7 @@ export default function Home() {
       finalConsistency = Math.max(0, Math.min(100, 100 - (stdDev / avg) * 100))
     }
     
-    // Update state
+    // Update state immediately
     setWpm(Math.round(finalNetWpm))
     setRawWpm(finalRawWpm)
     setNetWpm(Math.round(finalNetWpm))
@@ -249,7 +281,7 @@ export default function Home() {
     const result: TestResult = {
       wpm: Math.round(finalNetWpm),
       accuracy: finalAccuracy,
-      time: timeElapsed,
+      time: testTime,
       errors: finalErrorCount,
       rawWpm: finalRawWpm,
       netWpm: Math.round(finalNetWpm),
@@ -272,7 +304,7 @@ export default function Home() {
       localStorage.setItem('typingTest_history', JSON.stringify(newHistory))
       return newHistory
     })
-  }, [timeElapsed, text])
+  }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
@@ -296,9 +328,12 @@ export default function Home() {
     }
 
     // Check if finished - when user typed all characters (even with errors)
-    if (limitedValue.length >= text.length) {
-      finishTest(limitedValue)
-    } else if (isRunning) {
+    if (limitedValue.length >= text.length && text.length > 0 && !isFinished && isRunning) {
+      // Small delay to ensure timer has updated
+      setTimeout(() => {
+        finishTest(limitedValue, timeElapsedRef.current)
+      }, 50)
+    } else if (isRunning && !isFinished) {
       calculateStats(limitedValue)
     }
   }
@@ -315,7 +350,7 @@ export default function Home() {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       if (isRunning && !isFinished) {
-        finishTest(userInput)
+        finishTest(userInput, timeElapsedRef.current)
       }
     }
   }
@@ -449,7 +484,7 @@ export default function Home() {
             <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-lg rounded-xl p-5 border border-green-400/30 shadow-lg">
               <div className="text-gray-300 text-sm mb-1 font-medium">Accuracy</div>
               <div className="text-4xl font-bold text-white">{accuracy}%</div>
-              <div className="text-xs text-gray-400 mt-1">{text.length - errors} / {text.length} correct</div>
+              <div className="text-xs text-gray-400 mt-1">{text.length > 0 ? `${text.length - errors} / ${text.length} correct` : '0 / 0 correct'}</div>
             </div>
             <div className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 backdrop-blur-lg rounded-xl p-5 border border-blue-400/30 shadow-lg">
               <div className="text-gray-300 text-sm mb-1 font-medium">Time</div>
@@ -462,6 +497,23 @@ export default function Home() {
               <div className="text-xs text-gray-400 mt-1">{consistency}% consistency</div>
             </div>
           </div>
+
+          {/* Test Completion Message */}
+          {isFinished && (
+            <div className="mb-6 bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-lg rounded-xl p-6 border border-green-400/30 shadow-lg">
+              <div className="flex items-center gap-3 mb-2">
+                <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h2 className="text-2xl font-bold text-white">Test Completed!</h2>
+              </div>
+              <p className="text-gray-300">
+                You typed at <span className="font-bold text-green-400">{wpm} WPM</span> with{' '}
+                <span className="font-bold text-green-400">{accuracy}%</span> accuracy in{' '}
+                <span className="font-bold text-green-400">{timeElapsed.toFixed(1)} seconds</span>
+              </p>
+            </div>
+          )}
 
           {/* Advanced Stats */}
           {showStats && (
@@ -586,7 +638,7 @@ export default function Home() {
             </button>
             {isRunning && !isFinished && (
               <button
-                onClick={() => finishTest(userInput)}
+                onClick={() => finishTest(userInput, timeElapsedRef.current)}
                 className="px-8 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-xl hover:from-orange-600 hover:to-red-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 flex items-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
