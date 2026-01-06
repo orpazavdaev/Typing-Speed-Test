@@ -85,6 +85,7 @@ export default function Home() {
   const lastWpmRef = useRef<number[]>([])
   const timeElapsedRef = useRef<number>(0)
   const textRef = useRef<string>('')
+  const userInputRef = useRef<string>('')
 
   // Load personal best and history from localStorage
   useEffect(() => {
@@ -116,6 +117,7 @@ export default function Home() {
     setText(newText)
     textRef.current = newText
     setUserInput('')
+    userInputRef.current = ''
     setTimeElapsed(0)
     timeElapsedRef.current = 0
     setIsRunning(false)
@@ -151,11 +153,26 @@ export default function Home() {
 
       // Track performance every second
       performanceIntervalRef.current = setInterval(() => {
-        if (userInput.length > 0 && timeElapsed > 0) {
-          const words = userInput.trim().split(/\s+/).filter((w) => w.length > 0)
-          const minutes = timeElapsed / 60
-          const currentWpm = minutes > 0 ? words.length / minutes : 0
-          setPerformanceData((prev) => [...prev, { time: timeElapsed, wpm: Math.round(currentWpm) }])
+        const currentInput = userInputRef.current
+        const currentTime = timeElapsedRef.current
+        
+        if (currentInput.length > 0 && currentTime > 0) {
+          // Calculate WPM based on characters (5 characters = 1 word)
+          const charactersTyped = currentInput.length
+          const wordsTyped = Math.max(1, Math.round(charactersTyped / 5))
+          const minutes = currentTime / 60
+          const currentWpm = minutes > 0 ? Math.round(wordsTyped / minutes) : 0
+          
+          if (currentWpm > 0) {
+            setPerformanceData((prev) => {
+              // Avoid duplicates - only add if time is different by at least 0.5 seconds
+              const lastPoint = prev[prev.length - 1]
+              if (!lastPoint || Math.abs(lastPoint.time - currentTime) > 0.5) {
+                return [...prev, { time: currentTime, wpm: currentWpm }]
+              }
+              return prev
+            })
+          }
         }
       }, 1000)
     } else {
@@ -167,7 +184,7 @@ export default function Home() {
       if (timerRef.current) clearInterval(timerRef.current)
       if (performanceIntervalRef.current) clearInterval(performanceIntervalRef.current)
     }
-  }, [isRunning, isFinished, userInput, timeElapsed])
+  }, [isRunning, isFinished])
 
   const calculateStats = useCallback((input: string) => {
     const words = input.trim().split(/\s+/).filter((word) => word.length > 0)
@@ -316,6 +333,7 @@ export default function Home() {
     // Allow typing even if there are errors - limit to text length
     const limitedValue = value.substring(0, text.length)
     setUserInput(limitedValue)
+    userInputRef.current = limitedValue
     setCurrentCharIndex(limitedValue.length)
 
     // Track key presses for heatmap
@@ -519,17 +537,51 @@ export default function Home() {
           {showStats && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20 min-h-[140px] flex flex-col">
-                <div className="text-gray-300 text-sm mb-2 font-medium">Performance Graph</div>
-                <div className="h-24 flex items-end gap-1 flex-1">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-gray-300 text-sm font-medium">Performance Graph</div>
+                  {performanceData.length > 0 && (
+                    <div className="text-xs text-gray-400">
+                      Max: {maxPerformanceWpm} WPM
+                    </div>
+                  )}
+                </div>
+                <div className="h-24 flex items-end gap-0.5 flex-1 relative">
                   {performanceData.length > 0 ? (
-                    performanceData.map((point, i) => (
-                      <div
-                        key={i}
-                        className="flex-1 bg-gradient-to-t from-purple-500 to-pink-500 rounded-t transition-all duration-300"
-                        style={{ height: `${(point.wpm / maxPerformanceWpm) * 100}%` }}
-                        title={`${point.wpm} WPM at ${point.time.toFixed(1)}s`}
-                      />
-                    ))
+                    <>
+                      {/* Y-axis labels */}
+                      <div className="absolute left-0 top-0 text-xs text-gray-500 flex flex-col justify-between h-full pr-1">
+                        <span>{maxPerformanceWpm}</span>
+                        <span>{Math.round(maxPerformanceWpm / 2)}</span>
+                        <span>0</span>
+                      </div>
+                      {/* Graph bars */}
+                      <div className="flex-1 flex items-end gap-0.5 ml-6">
+                        {performanceData.map((point, i) => {
+                          const heightPercent = maxPerformanceWpm > 0 
+                            ? Math.max(5, (point.wpm / maxPerformanceWpm) * 100) 
+                            : 5
+                          return (
+                            <div
+                              key={i}
+                              className="flex-1 bg-gradient-to-t from-purple-500 to-pink-500 rounded-t transition-all duration-300 min-h-[4px] hover:from-purple-400 hover:to-pink-400 cursor-pointer group relative"
+                              style={{ height: `${heightPercent}%` }}
+                              title={`${point.wpm} WPM at ${point.time.toFixed(1)}s`}
+                            >
+                              {/* Tooltip on hover */}
+                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">
+                                {point.wpm} WPM
+                                <br />
+                                {point.time.toFixed(1)}s
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      {/* X-axis label */}
+                      <div className="absolute bottom-0 left-6 right-0 text-xs text-gray-500 text-center">
+                        Time (seconds)
+                      </div>
+                    </>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <div className="text-center">
@@ -537,10 +589,16 @@ export default function Home() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
                         <div className="text-gray-400 text-sm">Start typing to see performance</div>
+                        <div className="text-gray-500 text-xs mt-1">Shows your WPM over time</div>
                       </div>
                     </div>
                   )}
                 </div>
+                {performanceData.length > 0 && (
+                  <div className="mt-2 text-xs text-gray-400 text-center">
+                    Each bar represents your WPM at that second
+                  </div>
+                )}
               </div>
               <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20 min-h-[140px] flex flex-col">
                 <div className="text-gray-300 text-sm mb-2 font-medium">Personal Best</div>
