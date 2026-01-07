@@ -1,6 +1,3 @@
-export type Difficulty = 'easy' | 'medium' | 'hard'
-export type Category = 'quotes' | 'programming' | 'random' | 'literature'
-
 export interface TestResult {
   wpm: number
   accuracy: number

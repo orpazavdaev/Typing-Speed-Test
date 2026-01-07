@@ -1,5 +1,8 @@
 import React from 'react'
-import { Difficulty, Category } from '@/types'
+
+// This component is no longer used but kept for reference
+type Difficulty = 'easy' | 'medium' | 'hard'
+type Category = 'quotes' | 'programming' | 'random' | 'literature'
 
 interface SettingsPanelProps {
   difficulty: Difficulty

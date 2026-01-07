@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Head from 'next/head'
-import { Difficulty, Category, TestResult, PerformancePoint } from '@/types'
-import { TEXT_CATEGORIES, DIFFICULTY_LENGTHS } from '@/constants'
+import { TestResult, PerformancePoint } from '@/types'
+import { TEXTS } from '@/constants'
 import { StatsCard } from '@/components/StatsCard'
 import { TextDisplay } from '@/components/TextDisplay'
 import { TestCompletionMessage } from '@/components/TestCompletionMessage'
@@ -46,44 +46,9 @@ export default function Home() {
     if (savedHistory) setTestHistory(JSON.parse(savedHistory))
   }, [])
 
-  const getTextByDifficulty = useCallback((cat: Category, diff: Difficulty): string => {
-    const texts = TEXT_CATEGORIES[cat]
-    const baseText = texts[Math.floor(Math.random() * texts.length)]
-    const targetLength = DIFFICULTY_LENGTHS[diff]
-    
-    if (baseText.length >= targetLength) {
-      // Find the last space before targetLength to avoid cutting words
-      let cutPoint = targetLength
-      const lastSpace = baseText.lastIndexOf(' ', targetLength)
-      if (lastSpace > targetLength * 0.7) { // Only cut at space if it's not too early
-        cutPoint = lastSpace
-      }
-      return baseText.substring(0, cutPoint).trim()
-    }
-    
-    // Repeat text to reach target length, but always end at a word boundary
-    let result = baseText
-    while (result.length < targetLength) {
-      result += ' ' + baseText
-    }
-    
-    // Find the last space before targetLength to avoid cutting words
-    let cutPoint = targetLength
-    const lastSpace = result.lastIndexOf(' ', targetLength)
-    if (lastSpace > targetLength * 0.7) { // Only cut at space if it's not too early
-      cutPoint = lastSpace
-    }
-    return result.substring(0, cutPoint).trim()
-  }, [])
-
   const generateNewText = useCallback(() => {
-    // Randomly select difficulty and category
-    const difficulties: Difficulty[] = ['easy', 'medium', 'hard']
-    const categories: Category[] = ['quotes', 'programming', 'random', 'literature']
-    const randomDifficulty = difficulties[Math.floor(Math.random() * difficulties.length)]
-    const randomCategory = categories[Math.floor(Math.random() * categories.length)]
-    
-    const newText = getTextByDifficulty(randomCategory, randomDifficulty)
+    // Get random text from all texts
+    const newText = TEXTS[Math.floor(Math.random() * TEXTS.length)]
     setText(newText)
     textRef.current = newText
     setUserInput('')
@@ -104,7 +69,7 @@ export default function Home() {
     lastWpmRef.current = []
     if (timerRef.current) clearInterval(timerRef.current)
     if (performanceIntervalRef.current) clearInterval(performanceIntervalRef.current)
-  }, [getTextByDifficulty])
+  }, [])
 
   useEffect(() => {
     generateNewText()
