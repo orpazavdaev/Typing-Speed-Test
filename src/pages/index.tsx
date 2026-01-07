@@ -1,61 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Head from 'next/head'
-
-type Difficulty = 'easy' | 'medium' | 'hard'
-type Category = 'quotes' | 'programming' | 'random' | 'literature'
-
-interface TestResult {
-  wpm: number
-  accuracy: number
-  time: number
-  errors: number
-  rawWpm: number
-  netWpm: number
-  consistency: number
-  timestamp: number
-}
-
-interface PerformancePoint {
-  time: number
-  wpm: number
-}
-
-const TEXT_CATEGORIES: Record<Category, string[]> = {
-  quotes: [
-    "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet.",
-    "Programming is the art of telling another human being what one wants the computer to do.",
-    "The best way to predict the future is to invent it. Computer science is no more about computers than astronomy is about telescopes.",
-    "Code is like humor. When you have to explain it, it's bad. Clean code always looks like it was written by someone who cares.",
-    "First, solve the problem. Then, write the code. Any fool can write code that a computer can understand. Good programmers write code that humans can understand.",
-  ],
-  programming: [
-    "const fetchData = async () => { const response = await fetch('/api/data'); return response.json(); }",
-    "function binarySearch(arr, target) { let left = 0, right = arr.length - 1; while (left <= right) { const mid = Math.floor((left + right) / 2); if (arr[mid] === target) return mid; arr[mid] < target ? left = mid + 1 : right = mid - 1; } return -1; }",
-    "class Component extends React.Component { constructor(props) { super(props); this.state = { count: 0 }; } render() { return <div>{this.state.count}</div>; } }",
-    "const debounce = (func, wait) => { let timeout; return function executedFunction(...args) { const later = () => { clearTimeout(timeout); func(...args); }; clearTimeout(timeout); timeout = setTimeout(later, wait); }; };",
-    "interface User { id: number; name: string; email: string; } const users: User[] = [{ id: 1, name: 'John', email: 'john@example.com' }];",
-  ],
-  random: [
-    "The mysterious package arrived on a Tuesday morning, wrapped in brown paper and tied with string. Inside, there was nothing but a single key and a note that read: 'The adventure begins now.'",
-    "She walked through the ancient forest, where sunlight filtered through the canopy in golden streams. Every step crunched on fallen leaves, and the air smelled of damp earth and pine.",
-    "The old lighthouse stood tall against the stormy sky, its beam cutting through the darkness like a sword. Waves crashed against the rocky shore, sending spray high into the air.",
-    "In the heart of the city, neon signs flickered to life as dusk settled. Crowds of people moved like rivers through the streets, each person lost in their own world of thoughts and destinations.",
-    "The recipe called for three cups of flour, two eggs, and a pinch of magic. As she mixed the ingredients, the batter began to glow with an otherworldly light, promising something extraordinary.",
-  ],
-  literature: [
-    "It was the best of times, it was the worst of times, it was the age of wisdom, it was the age of foolishness, it was the epoch of belief, it was the epoch of incredulity.",
-    "In a hole in the ground there lived a hobbit. Not a nasty, dirty, wet hole, filled with the ends of worms and an oozy smell, nor yet a dry, bare, sandy hole with nothing in it to sit down on or to eat: it was a hobbit-hole, and that means comfort.",
-    "Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world.",
-    "It is a truth universally acknowledged, that a single man in possession of a good fortune, must be in want of a wife. However little known the feelings or views of such a man may be on his first entering a neighbourhood, this truth is so well fixed in the minds of the surrounding families.",
-    "The sun was shining on the sea, shining with all his might: He did his very best to make the billows smooth and bright—And this was odd, because it was the middle of the night.",
-  ],
-}
-
-const DIFFICULTY_LENGTHS: Record<Difficulty, number> = {
-  easy: 50,
-  medium: 100,
-  hard: 200,
-}
+import { Difficulty, Category, TestResult, PerformancePoint } from '@/types'
+import { TEXT_CATEGORIES, DIFFICULTY_LENGTHS } from '@/constants'
+import { StatsCard } from '@/components/StatsCard'
+import { TextDisplay } from '@/components/TextDisplay'
+import { SettingsPanel } from '@/components/SettingsPanel'
+import { TestCompletionMessage } from '@/components/TestCompletionMessage'
+import { AdvancedStats } from '@/components/AdvancedStats'
+import { PersonalBestCard } from '@/components/PersonalBestCard'
+import { RecentTestsCard } from '@/components/RecentTestsCard'
+import { KeyboardHeatmap } from '@/components/KeyboardHeatmap'
 
 export default function Home() {
   const [text, setText] = useState('')
@@ -249,7 +203,6 @@ export default function Home() {
     const testTime = finalTime !== undefined ? finalTime : timeElapsedRef.current
     const currentText = textRef.current || text
     
-    
     // Calculate final stats
     // Count words based on typed characters (5 characters = 1 word)
     const charactersTyped = finalInput.length
@@ -321,7 +274,7 @@ export default function Home() {
       localStorage.setItem('typingTest_history', JSON.stringify(newHistory))
       return newHistory
     })
-  }, [])
+  }, [text])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
@@ -373,25 +326,12 @@ export default function Home() {
     }
   }
 
-  const getCharClass = (index: number) => {
-    if (index >= userInput.length) {
-      return 'text-gray-400'
-    }
-    if (userInput[index] === text[index]) {
-      return 'text-green-400 bg-green-400/20'
-    }
-    return 'text-red-400 bg-red-400/20 underline'
-  }
-
   const resetTest = () => {
     generateNewText()
     if (inputRef.current) {
       inputRef.current.focus()
     }
   }
-
-  const maxKeyPresses = Math.max(...Object.values(keyPressCount), 1)
-  const maxPerformanceWpm = Math.max(...performanceData.map(p => p.wpm), 1)
 
   return (
     <>
@@ -412,266 +352,87 @@ export default function Home() {
             <p className="text-gray-300 text-lg">Test your typing speed with professional analytics</p>
           </div>
 
-          {/* Settings */}
-          <div className="bg-white/10 backdrop-blur-lg rounded-xl p-5 mb-6 border border-white/20 shadow-lg">
-            <div className="flex flex-wrap gap-6 items-center justify-center">
-              <div className="flex flex-col gap-2">
-                <label className="text-gray-300 text-sm font-medium flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  Difficulty
-                </label>
-                <div className="relative">
-                  <select
-                    value={difficulty}
-                    onChange={(e) => {
-                      setDifficulty(e.target.value as Difficulty)
-                      generateNewText()
-                    }}
-                    disabled={isRunning}
-                    className="appearance-none px-4 py-2.5 pr-10 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/30 rounded-lg text-white font-medium focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:from-purple-500/30 hover:to-pink-500/30 min-w-[140px] shadow-md"
-                    style={{ color: 'white' }}
-                  >
-                    <option value="easy" style={{ backgroundColor: '#1e293b', color: 'white' }}>Easy</option>
-                    <option value="medium" style={{ backgroundColor: '#1e293b', color: 'white' }}>Medium</option>
-                    <option value="hard" style={{ backgroundColor: '#1e293b', color: 'white' }}>Hard</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                    <svg className="w-5 h-5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-gray-300 text-sm font-medium flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                  </svg>
-                  Category
-                </label>
-                <div className="relative">
-                  <select
-                    value={category}
-                    onChange={(e) => {
-                      setCategory(e.target.value as Category)
-                      generateNewText()
-                    }}
-                    disabled={isRunning}
-                    className="appearance-none px-4 py-2.5 pr-10 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-400/30 rounded-lg text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:from-blue-500/30 hover:to-cyan-500/30 min-w-[160px] shadow-md"
-                    style={{ color: 'white' }}
-                  >
-                    <option value="quotes" style={{ backgroundColor: '#1e293b', color: 'white' }}>Quotes</option>
-                    <option value="programming" style={{ backgroundColor: '#1e293b', color: 'white' }}>Programming</option>
-                    <option value="random" style={{ backgroundColor: '#1e293b', color: 'white' }}>Random</option>
-                    <option value="literature" style={{ backgroundColor: '#1e293b', color: 'white' }}>Literature</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                    <svg className="w-5 h-5 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-end">
-                <button
-                  onClick={() => setShowStats(!showStats)}
-                  className="px-5 py-2.5 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-400/30 rounded-lg text-white hover:from-green-500/30 hover:to-emerald-500/30 transition-all duration-200 text-sm font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    {showStats ? (
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    ) : (
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    )}
-                  </svg>
-                  {showStats ? 'Hide' : 'Show'} Advanced Stats
-                </button>
-              </div>
-            </div>
-          </div>
+          {/* Settings Panel */}
+          <SettingsPanel
+            difficulty={difficulty}
+            category={category}
+            isRunning={isRunning}
+            showStats={showStats}
+            onDifficultyChange={setDifficulty}
+            onCategoryChange={setCategory}
+            onToggleStats={() => setShowStats(!showStats)}
+            onGenerateNewText={generateNewText}
+          />
 
           {/* Main Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 backdrop-blur-lg rounded-xl p-5 border border-purple-400/30 shadow-lg">
-              <div className="text-gray-300 text-sm mb-1 font-medium">WPM</div>
-              <div className="text-4xl font-bold text-white">{wpm}</div>
-              <div className="text-xs text-gray-400 mt-1">Net: {netWpm} | Raw: {rawWpm}</div>
-            </div>
-            <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 backdrop-blur-lg rounded-xl p-5 border border-green-400/30 shadow-lg">
-              <div className="text-gray-300 text-sm mb-1 font-medium">Accuracy</div>
-              <div className="text-4xl font-bold text-white">{accuracy}%</div>
-              <div className="text-xs text-gray-400 mt-1">{text.length > 0 ? `${text.length - errors} / ${text.length} correct` : '0 / 0 correct'}</div>
-            </div>
-            <div className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 backdrop-blur-lg rounded-xl p-5 border border-blue-400/30 shadow-lg">
-              <div className="text-gray-300 text-sm mb-1 font-medium">Time</div>
-              <div className="text-4xl font-bold text-white">{timeElapsed.toFixed(1)}s</div>
-              <div className="text-xs text-gray-400 mt-1">{Math.round(timeElapsed / 60)}m {Math.round(timeElapsed % 60)}s</div>
-            </div>
-            <div className="bg-gradient-to-br from-red-500/20 to-orange-500/20 backdrop-blur-lg rounded-xl p-5 border border-red-400/30 shadow-lg">
-              <div className="text-gray-300 text-sm mb-1 font-medium">Errors</div>
-              <div className="text-4xl font-bold text-white">{errors}</div>
-              <div className="text-xs text-gray-400 mt-1">{consistency}% consistency</div>
-            </div>
+            <StatsCard
+              title="WPM"
+              value={wpm}
+              subtitle={`Net: ${netWpm} | Raw: ${rawWpm}`}
+              gradientFrom="from-purple-500/20"
+              gradientTo="to-pink-500/20"
+              borderColor="border-purple-400/30"
+            />
+            <StatsCard
+              title="Accuracy"
+              value={`${accuracy}%`}
+              subtitle={text.length > 0 ? `${text.length - errors} / ${text.length} correct` : '0 / 0 correct'}
+              gradientFrom="from-green-500/20"
+              gradientTo="to-emerald-500/20"
+              borderColor="border-green-400/30"
+            />
+            <StatsCard
+              title="Time"
+              value={`${timeElapsed.toFixed(1)}s`}
+              subtitle={`${Math.round(timeElapsed / 60)}m ${Math.round(timeElapsed % 60)}s`}
+              gradientFrom="from-blue-500/20"
+              gradientTo="to-cyan-500/20"
+              borderColor="border-blue-400/30"
+            />
+            <StatsCard
+              title="Errors"
+              value={errors}
+              subtitle={`${consistency}% consistency`}
+              gradientFrom="from-red-500/20"
+              gradientTo="to-orange-500/20"
+              borderColor="border-red-400/30"
+            />
           </div>
 
           {/* Test Completion Message */}
           {isFinished && (
-            <div className="mb-6 bg-gradient-to-r from-green-500/20 to-emerald-500/20 backdrop-blur-lg rounded-xl p-6 border border-green-400/30 shadow-lg">
-              <div className="flex items-center gap-3 mb-2">
-                <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <h2 className="text-2xl font-bold text-white">Test Completed!</h2>
-              </div>
-              <p className="text-gray-300">
-                You typed at <span className="font-bold text-green-400">{wpm} WPM</span> with{' '}
-                <span className="font-bold text-green-400">{accuracy}%</span> accuracy in{' '}
-                <span className="font-bold text-green-400">{timeElapsed.toFixed(1)} seconds</span>
-              </p>
-            </div>
+            <TestCompletionMessage
+              wpm={wpm}
+              accuracy={accuracy}
+              timeElapsed={timeElapsed}
+            />
           )}
 
           {/* Advanced Stats */}
           {showStats && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20 min-h-[140px] flex flex-col">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-gray-300 text-sm font-medium">Performance Graph</div>
-                  {performanceData.length > 0 && (
-                    <div className="text-xs text-gray-400">
-                      Max: {maxPerformanceWpm} WPM
-                    </div>
-                  )}
-                </div>
-                <div className="h-24 flex items-end gap-0.5 flex-1 relative">
-                  {performanceData.length > 0 ? (
-                    <>
-                      {/* Y-axis labels */}
-                      <div className="absolute left-0 top-0 text-xs text-gray-500 flex flex-col justify-between h-full pr-1">
-                        <span>{maxPerformanceWpm}</span>
-                        <span>{Math.round(maxPerformanceWpm / 2)}</span>
-                        <span>0</span>
-                      </div>
-                      {/* Graph bars */}
-                      <div className="flex-1 flex items-end gap-0.5 ml-6">
-                        {performanceData.map((point, i) => {
-                          const heightPercent = maxPerformanceWpm > 0 
-                            ? Math.max(5, (point.wpm / maxPerformanceWpm) * 100) 
-                            : 5
-                          return (
-                            <div
-                              key={i}
-                              className="flex-1 bg-gradient-to-t from-purple-500 to-pink-500 rounded-t transition-all duration-300 min-h-[4px] hover:from-purple-400 hover:to-pink-400 cursor-pointer group relative"
-                              style={{ height: `${heightPercent}%` }}
-                              title={`${point.wpm} WPM at ${point.time.toFixed(1)}s`}
-                            >
-                              {/* Tooltip on hover */}
-                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">
-                                {point.wpm} WPM
-                                <br />
-                                {point.time.toFixed(1)}s
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      {/* X-axis label */}
-                      <div className="absolute bottom-0 left-6 right-0 text-xs text-gray-500 text-center">
-                        Time (seconds)
-                      </div>
-                    </>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="text-center">
-                        <svg className="w-8 h-8 mx-auto mb-2 text-gray-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                        <div className="text-gray-400 text-sm">Start typing to see performance</div>
-                        <div className="text-gray-500 text-xs mt-1">Shows your WPM over time</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {performanceData.length > 0 && (
-                  <div className="mt-2 text-xs text-gray-400 text-center">
-                    Each bar represents your WPM at that second
-                  </div>
-                )}
+              <div className="md:col-span-2">
+                <AdvancedStats
+                  performanceData={performanceData}
+                  errors={errors}
+                  timeElapsed={timeElapsed}
+                />
               </div>
-              <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20 min-h-[140px] flex flex-col">
-                <div className="text-gray-300 text-sm mb-2 font-medium">Personal Best</div>
-                <div className="flex-1 flex items-center justify-center">
-                  {personalBest ? (
-                    <div className="w-full">
-                      <div className="text-2xl font-bold text-white">{personalBest.wpm} WPM</div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {personalBest.accuracy}% accuracy • {personalBest.time.toFixed(1)}s
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {new Date(personalBest.timestamp).toLocaleDateString()}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center w-full">
-                      <svg className="w-8 h-8 mx-auto mb-2 text-gray-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                      </svg>
-                      <div className="text-gray-400 text-sm">No personal best yet</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 border border-white/20 min-h-[140px] flex flex-col">
-                <div className="text-gray-300 text-sm mb-2 font-medium">Recent Tests</div>
-                <div className="flex-1 overflow-y-auto">
-                  {testHistory.length > 0 ? (
-                    <div className="space-y-1.5">
-                      {testHistory.slice(0, 5).map((test, i) => (
-                        <div key={i} className="text-xs text-gray-300 bg-white/5 rounded px-2 py-1.5 border border-white/10">
-                          {test.wpm} WPM • {test.accuracy}% • {test.time.toFixed(1)}s
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="h-full flex items-center justify-center">
-                      <div className="text-center w-full">
-                        <svg className="w-8 h-8 mx-auto mb-2 text-gray-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div className="text-gray-400 text-sm">No tests yet</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+              <div className="space-y-4">
+                <PersonalBestCard personalBest={personalBest} />
+                <RecentTestsCard testHistory={testHistory} />
               </div>
             </div>
           )}
 
           {/* Text Display */}
-          <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 mb-4 border border-white/20 overflow-hidden shadow-xl">
-            <div className="text-lg leading-relaxed font-mono text-white mb-4 break-words overflow-wrap-anywhere max-w-full">
-              {text.split('').map((char, index) => (
-                <span
-                  key={index}
-                  className={`
-                    ${index === currentCharIndex && !isFinished ? 'bg-yellow-400/40 border-l-2 border-yellow-400 animate-pulse' : ''}
-                    ${getCharClass(index)}
-                    transition-all duration-75
-                  `}
-                >
-                  {char === ' ' ? '\u00A0' : char}
-                </span>
-              ))}
-            </div>
-            <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
-                style={{ width: `${(userInput.length / text.length) * 100}%` }}
-              />
-            </div>
-          </div>
+          <TextDisplay
+            text={text}
+            userInput={userInput}
+            currentCharIndex={currentCharIndex}
+            isFinished={isFinished}
+          />
 
           {/* Input Area */}
           <div className="mb-4">
@@ -717,27 +478,7 @@ export default function Home() {
 
           {/* Keyboard Heatmap */}
           {showStats && Object.keys(keyPressCount).length > 0 && (
-            <div className="bg-white/10 backdrop-blur-lg rounded-xl p-4 mb-4 border border-white/20">
-              <div className="text-gray-300 text-sm mb-3 font-medium">Keyboard Heatmap</div>
-              <div className="flex flex-wrap gap-1 justify-center">
-                {Object.entries(keyPressCount)
-                  .sort(([, a], [, b]) => b - a)
-                  .slice(0, 20)
-                  .map(([key, count]) => (
-                    <div
-                      key={key}
-                      className="px-2 py-1 rounded text-xs font-mono text-white border border-white/20 transition-all"
-                      style={{
-                        backgroundColor: `rgba(168, 85, 247, ${count / maxKeyPresses})`,
-                        opacity: 0.7 + (count / maxKeyPresses) * 0.3,
-                      }}
-                      title={`${key}: ${count} presses`}
-                    >
-                      {key === ' ' ? 'SPACE' : key.toUpperCase()}
-                    </div>
-                  ))}
-              </div>
-            </div>
+            <KeyboardHeatmap keyPressCount={keyPressCount} />
           )}
 
           {/* Instructions */}
