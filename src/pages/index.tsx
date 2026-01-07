@@ -4,7 +4,6 @@ import { Difficulty, Category, TestResult, PerformancePoint } from '@/types'
 import { TEXT_CATEGORIES, DIFFICULTY_LENGTHS } from '@/constants'
 import { StatsCard } from '@/components/StatsCard'
 import { TextDisplay } from '@/components/TextDisplay'
-import { SettingsPanel } from '@/components/SettingsPanel'
 import { TestCompletionMessage } from '@/components/TestCompletionMessage'
 import { AdvancedStats } from '@/components/AdvancedStats'
 import { PersonalBestCard } from '@/components/PersonalBestCard'
@@ -24,8 +23,6 @@ export default function Home() {
   const [errors, setErrors] = useState(0)
   const [consistency, setConsistency] = useState(100)
   const [currentCharIndex, setCurrentCharIndex] = useState(0)
-  const [difficulty, setDifficulty] = useState<Difficulty>('medium')
-  const [category, setCategory] = useState<Category>('quotes')
   const [performanceData, setPerformanceData] = useState<PerformancePoint[]>([])
   const [keyPressCount, setKeyPressCount] = useState<Record<string, number>>({})
   const [personalBest, setPersonalBest] = useState<TestResult | null>(null)
@@ -55,19 +52,38 @@ export default function Home() {
     const targetLength = DIFFICULTY_LENGTHS[diff]
     
     if (baseText.length >= targetLength) {
-      return baseText.substring(0, targetLength)
+      // Find the last space before targetLength to avoid cutting words
+      let cutPoint = targetLength
+      const lastSpace = baseText.lastIndexOf(' ', targetLength)
+      if (lastSpace > targetLength * 0.7) { // Only cut at space if it's not too early
+        cutPoint = lastSpace
+      }
+      return baseText.substring(0, cutPoint).trim()
     }
     
-    // Repeat text to reach target length
+    // Repeat text to reach target length, but always end at a word boundary
     let result = baseText
     while (result.length < targetLength) {
       result += ' ' + baseText
     }
-    return result.substring(0, targetLength)
+    
+    // Find the last space before targetLength to avoid cutting words
+    let cutPoint = targetLength
+    const lastSpace = result.lastIndexOf(' ', targetLength)
+    if (lastSpace > targetLength * 0.7) { // Only cut at space if it's not too early
+      cutPoint = lastSpace
+    }
+    return result.substring(0, cutPoint).trim()
   }, [])
 
   const generateNewText = useCallback(() => {
-    const newText = getTextByDifficulty(category, difficulty)
+    // Randomly select difficulty and category
+    const difficulties: Difficulty[] = ['easy', 'medium', 'hard']
+    const categories: Category[] = ['quotes', 'programming', 'random', 'literature']
+    const randomDifficulty = difficulties[Math.floor(Math.random() * difficulties.length)]
+    const randomCategory = categories[Math.floor(Math.random() * categories.length)]
+    
+    const newText = getTextByDifficulty(randomCategory, randomDifficulty)
     setText(newText)
     textRef.current = newText
     setUserInput('')
@@ -88,7 +104,7 @@ export default function Home() {
     lastWpmRef.current = []
     if (timerRef.current) clearInterval(timerRef.current)
     if (performanceIntervalRef.current) clearInterval(performanceIntervalRef.current)
-  }, [category, difficulty, getTextByDifficulty])
+  }, [getTextByDifficulty])
 
   useEffect(() => {
     generateNewText()
@@ -310,19 +326,9 @@ export default function Home() {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Prevent Tab from moving focus
     if (e.key === 'Tab') {
       e.preventDefault()
-      generateNewText()
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      generateNewText()
-    }
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault()
-      if (isRunning && !isFinished) {
-        finishTest(userInput, timeElapsedRef.current)
-      }
     }
   }
 
@@ -332,6 +338,32 @@ export default function Home() {
       inputRef.current.focus()
     }
   }
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Tab or Esc to start new test
+      if (e.key === 'Tab' || e.key === 'Escape') {
+        e.preventDefault()
+        generateNewText()
+        if (inputRef.current) {
+          inputRef.current.focus()
+        }
+      }
+      // Ctrl+Enter to finish test
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        if (isRunning && !isFinished) {
+          finishTest(userInput, timeElapsedRef.current)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown)
+    }
+  }, [isRunning, isFinished, userInput, generateNewText, finishTest])
 
   return (
     <>
@@ -352,17 +384,22 @@ export default function Home() {
             <p className="text-gray-300 text-lg">Test your typing speed with professional analytics</p>
           </div>
 
-          {/* Settings Panel */}
-          <SettingsPanel
-            difficulty={difficulty}
-            category={category}
-            isRunning={isRunning}
-            showStats={showStats}
-            onDifficultyChange={setDifficulty}
-            onCategoryChange={setCategory}
-            onToggleStats={() => setShowStats(!showStats)}
-            onGenerateNewText={generateNewText}
-          />
+          {/* Toggle Advanced Stats */}
+          <div className="flex justify-center mb-6">
+            <button
+              onClick={() => setShowStats(!showStats)}
+              className="px-6 py-3 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border border-green-400/30 rounded-lg text-white hover:from-green-500/30 hover:to-emerald-500/30 transition-all duration-200 text-sm font-medium flex items-center gap-2 shadow-md hover:shadow-lg"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {showStats ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                )}
+              </svg>
+              {showStats ? 'Hide' : 'Show'} Advanced Stats
+            </button>
+          </div>
 
           {/* Main Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -435,45 +472,16 @@ export default function Home() {
           />
 
           {/* Input Area */}
-          <div className="mb-4">
+          <div className="mb-6">
             <textarea
               ref={inputRef}
               value={userInput}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               disabled={isFinished}
-              placeholder={isFinished ? "Press Tab or click Reset to try again" : "Start typing here..."}
+              placeholder={isFinished ? "Press Tab or Esc to start a new test" : "Start typing here..."}
               className="w-full h-32 p-4 bg-white/10 backdrop-blur-lg rounded-xl border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent resize-none font-mono text-lg transition-all duration-200"
             />
-          </div>
-
-          {/* Controls */}
-          <div className="flex gap-4 justify-center mb-6 flex-wrap">
-            <button
-              onClick={resetTest}
-              className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
-            >
-              Reset Test
-            </button>
-            {isRunning && !isFinished && (
-              <button
-                onClick={() => finishTest(userInput, timeElapsedRef.current)}
-                className="px-8 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold rounded-xl hover:from-orange-600 hover:to-red-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 flex items-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Finish Test
-              </button>
-            )}
-            {isFinished && (
-              <div className="px-6 py-3 bg-green-500/20 border border-green-400/50 text-green-300 font-semibold rounded-xl flex items-center gap-2 animate-pulse">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                Test Completed!
-              </div>
-            )}
           </div>
 
           {/* Keyboard Heatmap */}
@@ -490,7 +498,7 @@ export default function Home() {
               <kbd className="px-2 py-1 bg-white/10 rounded border border-white/20">Ctrl+Enter</kbd> to finish test
             </p>
             <p className="text-xs text-gray-500">
-              The test ends automatically when you type all characters, or click "Finish Test" • Professional typing speed test with advanced analytics • Built with Next.js & TypeScript
+              The test ends automatically when you type all characters • A new text is generated on each refresh • Professional typing speed test with advanced analytics • Built with Next.js & TypeScript
             </p>
           </div>
         </div>
